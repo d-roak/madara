@@ -41,6 +41,8 @@
 pub use pallet::*;
 /// An adapter for the blockifier state related traits
 pub mod blockifier_state_adapter;
+/// An adapter for the starknet state related traits
+pub mod starknet_state_adapter;
 /// The implementation of the message type.
 pub mod message;
 /// The Starknet pallet's runtime API

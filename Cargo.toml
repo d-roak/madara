@@ -116,6 +116,7 @@ poseidon_hash = { default-features = false, package = "poseidon", git = "https:/
 	"alloc",
 ] }
 blockifier = { git = "https://github.com/tdelabro/blockifier", branch = "new-no_std-support", default-features = false }
+starknet-rs = { git = "https://github.com/lambdaclass/starknet_in_rust", branch = "test-deploy-failure", default-features = false }
 starknet_api = { git = "https://github.com/tdelabro/starknet-api", branch = "no_std-support", features = [
 	"testing",
 ], default-features = false }
