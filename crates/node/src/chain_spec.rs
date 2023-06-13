@@ -1,4 +1,3 @@
-use blockifier::execution::contract_class::ContractClass;
 use madara_runtime::{
     AccountId, AuraConfig, BalancesConfig, EnableManualSeal, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
     SystemConfig, WASM_BINARY,
@@ -180,7 +179,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
     ))
 }
 
-pub fn get_contract_class(contract_content: &'static [u8]) -> ContractClass {
+pub fn get_contract_class(contract_content: &'static [u8]) -> ContractClassWrapper {
     serde_json::from_slice(contract_content).unwrap()
 }
 

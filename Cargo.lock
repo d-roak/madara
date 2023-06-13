@@ -6817,6 +6817,7 @@ name = "pallet-starknet"
 version = "0.1.0-alpha"
 dependencies = [
  "blockifier",
+ "cairo-vm 0.3.0-rc1",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
