@@ -8,8 +8,8 @@ use blockifier::state::state_api::{State as BlockifierState, StateReader as Bloc
 
 // Starknet-rs imports
 use starknet_rs::{
-    business_logic::fact_state::state::StateDiff as StarknetStateDiff,
     business_logic::state::{
+        StateDiff as StarknetStateDiff,
         state_api::{
             State as StarknetState,
             StateReader as StarknetStateReader,
@@ -29,6 +29,7 @@ use starknet_rs::{
         CompiledClassHash as StarknetCompiledClassHash,
     },
 };
+use cairo_vm::felt::Felt252;
 pub type StarknetStorageKey = (Prefix, ClassHash);
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -138,9 +139,9 @@ impl<T: Config> BlockifierStateReader for StateAdapter<T> {
 
 impl<T: Config> BlockifierState for StateAdapter<T> {
     fn set_storage_at(&mut self, contract_address: ContractAddress, key: StorageKey, value: StarkFelt) {
-        self.storage_update.insert((contract_address, key), value);
         let contract_address: ContractAddressWrapper = contract_address.0.0.into();
         let key: StorageKeyWrapper = key.0.0.into();
+        self.storage_update.insert((contract_address, key), value);
 
         let contract_storage_key: ContractStorageKeyWrapper = (contract_address, key);
 
@@ -195,11 +196,11 @@ impl<T: Config> StarknetStateReader for StateAdapter<T> {
         todo!()
     }
 
-    fn get_nonce_at(&mut self, contract_address: &StarknetAddress) -> Result<Felt252Wrapper, StarknetStateError> {
+    fn get_nonce_at(&mut self, contract_address: &StarknetAddress) -> Result<Felt252, StarknetStateError> {
         todo!()
     }
 
-    fn get_storage_at(&mut self, storage_entry: &StarknetStorageEntry) -> Result<Felt252Wrapper, StarknetStateError> {
+    fn get_storage_at(&mut self, storage_entry: &StarknetStorageEntry) -> Result<Felt252, StarknetStateError> {
         todo!()
     }
 
@@ -234,15 +235,15 @@ impl<T: Config> StarknetState for StateAdapter<T> {
 
     fn set_compiled_class(
         &mut self,
-        compiled_class_hash: &StarkFelt,
-        casm_class: CasmContractClass,
+        class_hash: &Felt252,
+        compiled_class: StarknetCompiledClass,
     ) -> Result<(), StarknetStateError> {
         todo!()
     }
 
     fn set_compiled_class_hash(
         &mut self,
-        class_hash: &Felt252Wrapper,
+        class_hash: &Felt252,
         compiled_class_hash: &StarkFelt,
     ) -> Result<(), StarknetStateError> {
         todo!()
@@ -252,7 +253,7 @@ impl<T: Config> StarknetState for StateAdapter<T> {
         todo!()
     }
 
-    fn set_storage_at(&mut self, storage_entry: &StarknetStorageEntry, value: Felt252Wrapper) {
+    fn set_storage_at(&mut self, storage_entry: &StarknetStorageEntry, value: Felt252) {
         todo!()
     }
 
