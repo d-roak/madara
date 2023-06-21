@@ -844,6 +844,33 @@
 <a href="#844" id="844">844</a>
 <a href="#845" id="845">845</a>
 <a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Starknet RPC server API implementation
 //!
 //! It uses the madara client and backend in order to answer queries.
@@ -860,16 +887,18 @@
 <span class="kw">use </span>errors::StarknetRpcApiError;
 <span class="kw">use </span>jsonrpsee::core::{async_trait, RpcResult};
 <span class="kw">use </span>log::error;
-<span class="kw">use </span>mc_rpc_core::utils::{
-    get_block_by_block_hash, to_declare_tx, to_deploy_account_tx, to_invoke_tx, to_rpc_contract_class, to_tx,
-};
+<span class="kw">use </span>mc_rpc_core::utils::{get_block_by_block_hash, to_rpc_contract_class, to_tx};
 <span class="kw">use </span>mc_rpc_core::Felt;
 <span class="kw">pub use </span>mc_rpc_core::StarknetRpcApiServer;
 <span class="kw">use </span>mc_storage::OverrideHandle;
+<span class="kw">use </span>mc_transaction_pool::{ChainApi, Pool};
 <span class="kw">use </span>mp_starknet::execution::types::Felt252Wrapper;
 <span class="kw">use </span>mp_starknet::traits::hash::HasherT;
 <span class="kw">use </span>mp_starknet::traits::ThreadSafeCopy;
-<span class="kw">use </span>mp_starknet::transaction::types::{RPCTransactionConversionError, Transaction <span class="kw">as </span>MPTransaction, TxType};
+<span class="kw">use </span>mp_starknet::transaction::types::{
+    DeclareTransaction, DeployAccountTransaction, InvokeTransaction, RPCTransactionConversionError,
+    Transaction <span class="kw">as </span>MPTransaction, TxType,
+};
 <span class="kw">use </span>pallet_starknet::runtime_api::{ConvertTransactionRuntimeApi, StarknetRuntimeApi};
 <span class="kw">use </span>sc_client_api::backend::{Backend, StorageProvider};
 <span class="kw">use </span>sc_network_sync::SyncingService;
@@ -893,11 +922,12 @@
 <span class="kw">use </span><span class="kw">crate</span>::types::RpcEventFilter;
 
 <span class="doccomment">/// A Starknet RPC server for Madara
-</span><span class="kw">pub struct </span>Starknet&lt;B: BlockT, BE, C, P, H&gt; {
+</span><span class="kw">pub struct </span>Starknet&lt;A: ChainApi, B: BlockT, BE, C, P, H&gt; {
     client: Arc&lt;C&gt;,
     backend: Arc&lt;mc_db::Backend&lt;B&gt;&gt;,
     overrides: Arc&lt;OverrideHandle&lt;B&gt;&gt;,
     pool: Arc&lt;P&gt;,
+    graph: Arc&lt;Pool&lt;A&gt;&gt;,
     sync_service: Arc&lt;SyncingService&lt;B&gt;&gt;,
     starting_block: &lt;&lt;B&gt;::Header <span class="kw">as </span>HeaderT&gt;::Number,
     hasher: Arc&lt;H&gt;,
@@ -915,21 +945,23 @@
 //
 // # Returns
 // * `Self` - The actual Starknet struct
-</span><span class="kw">impl</span>&lt;B: BlockT, BE, C, P, H&gt; Starknet&lt;B, BE, C, P, H&gt; {
+</span><span class="attr">#[allow(clippy::too_many_arguments)]
+</span><span class="kw">impl</span>&lt;A: ChainApi, B: BlockT, BE, C, P, H&gt; Starknet&lt;A, B, BE, C, P, H&gt; {
     <span class="kw">pub fn </span>new(
         client: Arc&lt;C&gt;,
         backend: Arc&lt;mc_db::Backend&lt;B&gt;&gt;,
         overrides: Arc&lt;OverrideHandle&lt;B&gt;&gt;,
         pool: Arc&lt;P&gt;,
+        graph: Arc&lt;Pool&lt;A&gt;&gt;,
         sync_service: Arc&lt;SyncingService&lt;B&gt;&gt;,
         starting_block: &lt;&lt;B&gt;::Header <span class="kw">as </span>HeaderT&gt;::Number,
         hasher: Arc&lt;H&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ client, backend, overrides, pool, sync_service, starting_block, hasher, _marker: PhantomData }
+        <span class="self">Self </span>{ client, backend, overrides, pool, graph, sync_service, starting_block, hasher, _marker: PhantomData }
     }
 }
 
-<span class="kw">impl</span>&lt;B, BE, C, P, H&gt; Starknet&lt;B, BE, C, P, H&gt;
+<span class="kw">impl</span>&lt;A: ChainApi, B, BE, C, P, H&gt; Starknet&lt;A, B, BE, C, P, H&gt;
 <span class="kw">where
     </span>B: BlockT,
     C: HeaderBackend&lt;B&gt; + <span class="lifetime">&#39;static</span>,
@@ -939,7 +971,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;B, BE, C, P, H&gt; Starknet&lt;B, BE, C, P, H&gt;
+<span class="kw">impl</span>&lt;A: ChainApi, B, BE, C, P, H&gt; Starknet&lt;A, B, BE, C, P, H&gt;
 <span class="kw">where
     </span>B: BlockT,
     C: HeaderBackend&lt;B&gt; + StorageProvider&lt;B, BE&gt; + <span class="lifetime">&#39;static</span>,
@@ -956,7 +988,7 @@
         <span class="prelude-val">Ok</span>(block.header().hash(<span class="kw-2">*</span><span class="self">self</span>.hasher).into())
     }
 
-    <span class="doccomment">/// Returns the substrate block corresponding to the given Starknet block id
+    <span class="doccomment">/// Returns the substrate block hash corresponding to the given Starknet block id
     </span><span class="kw">fn </span>substrate_block_hash_from_starknet_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_id: BlockId) -&gt; <span class="prelude-ty">Result</span>&lt;B::Hash, String&gt; {
         <span class="kw">match </span>block_id {
             BlockId::Hash(h) =&gt; madara_backend_client::load_hash(
@@ -994,7 +1026,7 @@
         <span class="kw">let </span>block = get_block_by_block_hash(<span class="self">self</span>.client.as_ref(), substrate_block_hash)
             .ok_or(<span class="string">&quot;Failed to retrieve the substrate block number&quot;</span>.to_string())<span class="question-mark">?</span>;
 
-        u64::try_from(block.header().block_number).map_err(|e| <span class="macro">format!</span>(<span class="string">&quot;Failed to convert block number to u64: {e}&quot;</span>))
+        <span class="prelude-val">Ok</span>(block.header().block_number)
     }
 }
 
@@ -1003,9 +1035,10 @@
 
 <span class="attr">#[async_trait]
 #[allow(unused_variables)]
-</span><span class="kw">impl</span>&lt;B, BE, C, P, H&gt; StarknetRpcApiServer <span class="kw">for </span>Starknet&lt;B, BE, C, P, H&gt;
+</span><span class="kw">impl</span>&lt;A, B, BE, C, P, H&gt; StarknetRpcApiServer <span class="kw">for </span>Starknet&lt;A, B, BE, C, P, H&gt;
 <span class="kw">where
-    </span>B: BlockT,
+    </span>A: ChainApi&lt;Block = B&gt; + <span class="lifetime">&#39;static</span>,
+    B: BlockT,
     P: TransactionPool&lt;Block = B&gt; + <span class="lifetime">&#39;static</span>,
     BE: Backend&lt;B&gt; + <span class="lifetime">&#39;static</span>,
     C: HeaderBackend&lt;B&gt; + StorageProvider&lt;B, BE&gt; + <span class="lifetime">&#39;static</span>,
@@ -1244,7 +1277,7 @@
             </span>status: BlockStatus::AcceptedOnL2,
             block_hash: blockhash.into(),
             parent_hash: parent_blockhash.into(),
-            block_number: block.header().block_number.as_u64(),
+            block_number: block.header().block_number,
             new_root: block.header().global_state_root.into(),
             timestamp: block.header().block_timestamp,
             sequencer_address: block.header().sequencer_address.into(),
@@ -1298,30 +1331,18 @@
         invoke_transaction: BroadcastedInvokeTransaction,
     ) -&gt; RpcResult&lt;InvokeTransactionResult&gt; {
         <span class="kw">let </span>best_block_hash = <span class="self">self</span>.client.info().best_hash;
-        <span class="kw">let </span>invoke_tx = to_invoke_tx(invoke_transaction)<span class="question-mark">?</span>;
-        <span class="kw">let </span>chain_id =
-            Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>).from_utf8().map_err(|<span class="kw">_</span>| StarknetRpcApiError::InternalServerError)<span class="question-mark">?</span>;
+        <span class="kw">let </span>invoke_tx = InvokeTransaction::try_from(invoke_transaction).map_err(|e| {
+            <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
+            StarknetRpcApiError::InternalServerError
+        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>chain_id = Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>);
 
-        <span class="kw">let </span>transaction: MPTransaction = invoke_tx.from_invoke(<span class="kw-2">&amp;</span>chain_id);
-        <span class="kw">let </span>extrinsic = <span class="self">self
-            </span>.client
-            .runtime_api()
-            .convert_transaction(best_block_hash, transaction.clone(), TxType::Invoke)
-            .map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, e);
-                StarknetRpcApiError::ClassHashNotFound
-            })<span class="question-mark">?
-            </span>.map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, e);
-                StarknetRpcApiError::ClassHashNotFound
-            })<span class="question-mark">?</span>;
+        <span class="kw">let </span>transaction: MPTransaction = invoke_tx.from_invoke(chain_id);
 
-        <span class="self">self</span>.pool.submit_one(<span class="kw-2">&amp;</span>SPBlockId::hash(<span class="self">self</span>.client.info().best_hash), TX_SOURCE, extrinsic).<span class="kw">await</span>.map_err(
-            |e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to submit extrinsic: {:?}&quot;</span>, e);
-                StarknetRpcApiError::ContractError
-            },
-        )<span class="question-mark">?</span>;
+        <span class="kw">let </span>extrinsic =
+            convert_transaction(<span class="self">self</span>.client.clone(), best_block_hash, transaction.clone(), TxType::Invoke).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        submit_extrinsic(<span class="self">self</span>.pool.clone(), best_block_hash, extrinsic).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(InvokeTransactionResult { transaction_hash: transaction.hash.into() })
     }
@@ -1341,36 +1362,24 @@
         deploy_account_transaction: BroadcastedDeployAccountTransaction,
     ) -&gt; RpcResult&lt;DeployAccountTransactionResult&gt; {
         <span class="kw">let </span>best_block_hash = <span class="self">self</span>.client.info().best_hash;
-        <span class="kw">let </span>chain_id =
-            Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>).from_utf8().map_err(|<span class="kw">_</span>| StarknetRpcApiError::InternalServerError)<span class="question-mark">?</span>;
+        <span class="kw">let </span>chain_id = Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>);
 
-        <span class="kw">let </span>deploy_account_transaction = to_deploy_account_tx(deploy_account_transaction).map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
-            StarknetRpcApiError::InternalServerError
-        })<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>transaction: MPTransaction = deploy_account_transaction.from_deploy(<span class="kw-2">&amp;</span>chain_id).map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
-            StarknetRpcApiError::InternalServerError
-        })<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>extrinsic = <span class="self">self
-            </span>.client
-            .runtime_api()
-            .convert_transaction(best_block_hash, transaction.clone(), TxType::DeployAccount)
-            .map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, e);
-                StarknetRpcApiError::InternalServerError
-            })<span class="question-mark">?
-            </span>.map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, e);
+        <span class="kw">let </span>deploy_account_transaction =
+            DeployAccountTransaction::try_from(deploy_account_transaction).map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
                 StarknetRpcApiError::InternalServerError
             })<span class="question-mark">?</span>;
 
-        <span class="self">self</span>.pool.submit_one(<span class="kw-2">&amp;</span>SPBlockId::hash(best_block_hash), TX_SOURCE, extrinsic).<span class="kw">await</span>.map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;Failed to submit extrinsic: {:?}&quot;</span>, e);
+        <span class="kw">let </span>transaction: MPTransaction = deploy_account_transaction.from_deploy(chain_id).map_err(|e| {
+            <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
             StarknetRpcApiError::InternalServerError
         })<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>extrinsic =
+            convert_transaction(<span class="self">self</span>.client.clone(), best_block_hash, transaction.clone(), TxType::DeployAccount)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        submit_extrinsic(<span class="self">self</span>.pool.clone(), best_block_hash, extrinsic).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(DeployAccountTransactionResult {
             transaction_hash: transaction.hash.into(),
@@ -1398,10 +1407,12 @@
             StarknetRpcApiError::BlockNotFound
         })<span class="question-mark">?</span>;
         <span class="kw">let </span>best_block_hash = <span class="self">self</span>.client.info().best_hash;
-        <span class="kw">let </span>chain_id =
-            Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>).from_utf8().map_err(|<span class="kw">_</span>| StarknetRpcApiError::InternalServerError)<span class="question-mark">?</span>;
+        <span class="kw">let </span>chain_id = Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>);
 
-        <span class="kw">let </span>tx = to_tx(request, <span class="kw-2">&amp;</span>chain_id)<span class="question-mark">?</span>;
+        <span class="kw">let </span>tx = to_tx(request, chain_id).map_err(|e| {
+            <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
+            StarknetRpcApiError::InternalServerError
+        })<span class="question-mark">?</span>;
         <span class="kw">let </span>(actual_fee, gas_usage) = <span class="self">self
             </span>.client
             .runtime_api()
@@ -1448,10 +1459,7 @@
             </span>status: BlockStatus::AcceptedOnL2,
             block_hash: block.header().hash(<span class="kw-2">*</span><span class="self">self</span>.hasher).into(),
             parent_hash: block.header().parent_block_hash.into(),
-            block_number: block.header().block_number.try_into().map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to convert block number to u64: {e}&quot;</span>);
-                StarknetRpcApiError::BlockNotFound
-            })<span class="question-mark">?</span>,
+            block_number: block.header().block_number,
             new_root: block.header().global_state_root.into(),
             timestamp: block.header().block_timestamp,
             sequencer_address: block.header().sequencer_address.into(),
@@ -1479,8 +1487,16 @@
     </span><span class="kw">async fn </span>pending_transactions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;Vec&lt;Transaction&gt;&gt; {
         <span class="kw">let </span>substrate_block_hash = <span class="self">self</span>.client.info().best_hash;
 
-        <span class="kw">let </span>transactions: Vec&lt;&lt;B <span class="kw">as </span>BlockT&gt;::Extrinsic&gt; =
-            <span class="self">self</span>.pool.ready().map(|tx| tx.data().clone()).collect::&lt;Vec&lt;&lt;B <span class="kw">as </span>BlockT&gt;::Extrinsic&gt;&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>transactions = <span class="macro">vec!</span>[];
+
+        <span class="kw">let </span><span class="kw-2">mut </span>transactions_ready: Vec&lt;&lt;B <span class="kw">as </span>BlockT&gt;::Extrinsic&gt; =
+            <span class="self">self</span>.graph.validated_pool().ready().map(|tx| tx.data().clone()).collect();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>transactions_future: Vec&lt;&lt;B <span class="kw">as </span>BlockT&gt;::Extrinsic&gt; =
+            <span class="self">self</span>.graph.validated_pool().futures().into_iter().map(|(_hash, extrinsic)| extrinsic).collect();
+
+        transactions.append(<span class="kw-2">&amp;mut </span>transactions_ready);
+        transactions.append(<span class="kw-2">&amp;mut </span>transactions_future);
 
         <span class="kw">let </span>api = <span class="self">self</span>.client.runtime_api();
 
@@ -1567,34 +1583,34 @@
         declare_transaction: BroadcastedDeclareTransaction,
     ) -&gt; RpcResult&lt;DeclareTransactionResult&gt; {
         <span class="kw">let </span>best_block_hash = <span class="self">self</span>.client.info().best_hash;
-        <span class="kw">let </span>chain_id =
-            Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>).from_utf8().map_err(|<span class="kw">_</span>| StarknetRpcApiError::InternalServerError)<span class="question-mark">?</span>;
+        <span class="kw">let </span>chain_id = Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>);
 
-        <span class="kw">let </span>declare_tx = to_declare_tx(declare_transaction).map_err(|e| {
+        <span class="kw">let </span>declare_tx = DeclareTransaction::try_from(declare_transaction).map_err(|e| {
             <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
             StarknetRpcApiError::InternalServerError
         })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>transaction: MPTransaction = declare_tx.from_declare(<span class="kw-2">&amp;</span>chain_id);
-        <span class="kw">let </span>extrinsic = <span class="self">self
-            </span>.client
-            .runtime_api()
-            .convert_transaction(best_block_hash, transaction.clone(), TxType::Declare)
-            .map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, e);
-                StarknetRpcApiError::InternalServerError
-            })<span class="question-mark">?
-            </span>.map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, e);
-                StarknetRpcApiError::InternalServerError
-            })<span class="question-mark">?</span>;
+        <span class="kw">let </span>current_block_hash = <span class="self">self</span>.client.info().best_hash;
+        <span class="kw">let </span>contract_class = <span class="self">self
+            </span>.overrides
+            .for_block_hash(<span class="self">self</span>.client.as_ref(), current_block_hash)
+            .contract_class_by_class_hash(current_block_hash, declare_tx.compiled_class_hash);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(contract_class) = contract_class {
+            <span class="macro">error!</span>(<span class="string">&quot;Contract class already exists: {:?}&quot;</span>, contract_class);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(StarknetRpcApiError::ClassAlreadyDeclared.into());
+        }
 
-        <span class="self">self</span>.pool.submit_one(<span class="kw-2">&amp;</span>SPBlockId::hash(best_block_hash), TX_SOURCE, extrinsic).<span class="kw">await</span>.map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;Failed to submit extrinsic: {:?}&quot;</span>, e);
-            StarknetRpcApiError::InternalServerError
-        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>transaction: MPTransaction = declare_tx.clone().from_declare(chain_id);
 
-        <span class="prelude-val">Ok</span>(DeclareTransactionResult { transaction_hash: transaction.hash.into(), class_hash: FieldElement::ZERO })
+        <span class="kw">let </span>extrinsic =
+            convert_transaction(<span class="self">self</span>.client.clone(), best_block_hash, transaction.clone(), TxType::Declare).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        submit_extrinsic(<span class="self">self</span>.pool.clone(), best_block_hash, extrinsic).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(DeclareTransactionResult {
+            transaction_hash: transaction.hash.into(),
+            class_hash: declare_tx.compiled_class_hash.into(),
+        })
     }
 
     <span class="doccomment">/// Returns a transaction details from it&#39;s hash.
@@ -1669,10 +1685,7 @@
             get_block_by_block_hash(<span class="self">self</span>.client.as_ref(), substrate_block_hash).unwrap_or_default();
         <span class="kw">let </span>block_header = block.header();
         <span class="kw">let </span>block_hash = block_header.hash(<span class="kw-2">*</span><span class="self">self</span>.hasher).into();
-        <span class="kw">let </span>block_number = u64::try_from(block_header.block_number).map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;Failed to convert block number to u64: {e}&quot;</span>);
-            StarknetRpcApiError::TxnHashNotFound
-        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_number = block_header.block_number;
 
         <span class="kw">let </span>find_receipt = block
             .transaction_receipts()
@@ -1687,6 +1700,47 @@
         <span class="kw">match </span>find_receipt {
             <span class="prelude-val">Some</span>(receipt) =&gt; <span class="prelude-val">Ok</span>(receipt),
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(StarknetRpcApiError::TxnHashNotFound.into()),
+        }
+    }
+}
+
+<span class="kw">async fn </span>submit_extrinsic&lt;P, B&gt;(
+    pool: Arc&lt;P&gt;,
+    best_block_hash: &lt;B <span class="kw">as </span>BlockT&gt;::Hash,
+    extrinsic: &lt;B <span class="kw">as </span>BlockT&gt;::Extrinsic,
+) -&gt; <span class="prelude-ty">Result</span>&lt;&lt;P <span class="kw">as </span>TransactionPool&gt;::Hash, StarknetRpcApiError&gt;
+<span class="kw">where
+    </span>P: TransactionPool&lt;Block = B&gt; + <span class="lifetime">&#39;static</span>,
+    B: BlockT,
+    &lt;B <span class="kw">as </span>BlockT&gt;::Extrinsic: Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    pool.submit_one(<span class="kw-2">&amp;</span>SPBlockId::hash(best_block_hash), TX_SOURCE, extrinsic).<span class="kw">await</span>.map_err(|e| {
+        <span class="macro">error!</span>(<span class="string">&quot;Failed to submit extrinsic: {:?}&quot;</span>, e);
+        StarknetRpcApiError::InternalServerError
+    })
+}
+
+<span class="kw">async fn </span>convert_transaction&lt;C, B&gt;(
+    client: Arc&lt;C&gt;,
+    best_block_hash: &lt;B <span class="kw">as </span>BlockT&gt;::Hash,
+    transaction: MPTransaction,
+    tx_type: TxType,
+) -&gt; <span class="prelude-ty">Result</span>&lt;&lt;B <span class="kw">as </span>BlockT&gt;::Extrinsic, StarknetRpcApiError&gt;
+<span class="kw">where
+    </span>B: BlockT,
+    C: ProvideRuntimeApi&lt;B&gt;,
+    C::Api: StarknetRuntimeApi&lt;B&gt; + ConvertTransactionRuntimeApi&lt;B&gt;,
+{
+    <span class="kw">let </span>result = client.runtime_api().convert_transaction(best_block_hash, transaction, tx_type).map_err(|e| {
+        <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, e);
+        StarknetRpcApiError::InternalServerError
+    })<span class="question-mark">?</span>;
+
+    <span class="kw">match </span>result {
+        <span class="prelude-val">Ok</span>(extrinsic) =&gt; <span class="prelude-val">Ok</span>(extrinsic),
+        <span class="prelude-val">Err</span>(dispatch_error) =&gt; {
+            <span class="macro">error!</span>(<span class="string">&quot;Failed to convert transaction: {:?}&quot;</span>, dispatch_error);
+            <span class="prelude-val">Err</span>(StarknetRpcApiError::InternalServerError)
         }
     }
 }
