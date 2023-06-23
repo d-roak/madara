@@ -3,7 +3,8 @@ use mp_starknet::crypto::commitment::calculate_declare_tx_hash;
 use mp_starknet::execution::types::{ContractClassWrapper, Felt252Wrapper};
 use mp_starknet::transaction::types::DeclareTransaction;
 use sp_runtime::traits::ValidateUnsigned;
-use sp_runtime::transaction_validity::{TransactionSource, TransactionValidityError};
+use sp_runtime::transaction_validity::{TransactionSource, TransactionValidityError, ValidTransaction};
+use starknet_crypto::FieldElement;
 
 use super::mock::*;
 use super::utils::{get_contract_class, sign_message_hash};
@@ -12,8 +13,7 @@ use crate::Error;
 #[test]
 fn given_contract_declare_tx_works_once_not_twice() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let none_origin = RuntimeOrigin::none();
         let account_addr = get_account_address(AccountType::NoValidate);
 
@@ -41,8 +41,7 @@ fn given_contract_declare_tx_works_once_not_twice() {
 #[test]
 fn given_contract_declare_tx_fails_sender_not_deployed() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
 
         let none_origin = RuntimeOrigin::none();
 
@@ -71,8 +70,7 @@ fn given_contract_declare_tx_fails_sender_not_deployed() {
 #[test]
 fn given_contract_declare_tx_fails_wrong_tx_version() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
 
         let none_origin = RuntimeOrigin::none();
         let account_addr = get_account_address(AccountType::Argent);
@@ -101,8 +99,7 @@ fn given_contract_declare_tx_fails_wrong_tx_version() {
 #[test]
 fn given_contract_declare_on_openzeppelin_account_then_it_works() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let none_origin = RuntimeOrigin::none();
 
         let account_addr = get_account_address(AccountType::Openzeppelin);
@@ -121,8 +118,7 @@ fn given_contract_declare_on_openzeppelin_account_then_it_works() {
             signature: bounded_vec!(),
         };
 
-        let chain_id = Starknet::chain_id().0.to_bytes_be();
-        let chain_id = std::str::from_utf8(&chain_id[..]).unwrap();
+        let chain_id = Starknet::chain_id();
         let transaction_hash = calculate_declare_tx_hash(transaction.clone(), chain_id);
         transaction.signature = sign_message_hash(transaction_hash);
 
@@ -143,8 +139,7 @@ fn given_contract_declare_on_openzeppelin_account_then_it_works() {
 #[test]
 fn given_contract_declare_on_openzeppelin_account_with_incorrect_signature_then_it_fails() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let none_origin = RuntimeOrigin::none();
 
         let account_addr = get_account_address(AccountType::Openzeppelin);
@@ -176,8 +171,7 @@ fn given_contract_declare_on_openzeppelin_account_with_incorrect_signature_then_
 #[test]
 fn given_contract_declare_on_braavos_account_then_it_works() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let none_origin = RuntimeOrigin::none();
 
         let account_addr = get_account_address(AccountType::Braavos);
@@ -196,8 +190,7 @@ fn given_contract_declare_on_braavos_account_then_it_works() {
             signature: bounded_vec!(),
         };
 
-        let chain_id = Starknet::chain_id().0.to_bytes_be();
-        let chain_id = std::str::from_utf8(&chain_id[..]).unwrap();
+        let chain_id = Starknet::chain_id();
         let transaction_hash = calculate_declare_tx_hash(transaction.clone(), chain_id);
         transaction.signature = sign_message_hash(transaction_hash);
 
@@ -218,8 +211,7 @@ fn given_contract_declare_on_braavos_account_then_it_works() {
 #[test]
 fn given_contract_declare_on_braavos_account_with_incorrect_signature_then_it_fails() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let none_origin = RuntimeOrigin::none();
 
         let account_addr = get_account_address(AccountType::Braavos);
@@ -251,8 +243,7 @@ fn given_contract_declare_on_braavos_account_with_incorrect_signature_then_it_fa
 #[test]
 fn given_contract_declare_on_argent_account_then_it_works() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let none_origin = RuntimeOrigin::none();
 
         let account_addr = get_account_address(AccountType::Argent);
@@ -271,8 +262,7 @@ fn given_contract_declare_on_argent_account_then_it_works() {
             signature: bounded_vec!(),
         };
 
-        let chain_id = Starknet::chain_id().0.to_bytes_be();
-        let chain_id = std::str::from_utf8(&chain_id[..]).unwrap();
+        let chain_id = Starknet::chain_id();
         let transaction_hash = calculate_declare_tx_hash(transaction.clone(), chain_id);
         transaction.signature = sign_message_hash(transaction_hash);
 
@@ -293,8 +283,7 @@ fn given_contract_declare_on_argent_account_then_it_works() {
 #[test]
 fn given_contract_declare_on_argent_account_with_incorrect_signature_then_it_fails() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let none_origin = RuntimeOrigin::none();
 
         let account_addr = get_account_address(AccountType::Argent);
@@ -326,8 +315,7 @@ fn given_contract_declare_on_argent_account_with_incorrect_signature_then_it_fai
 #[test]
 fn test_verify_tx_longevity() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        run_to_block(2);
+        basic_test_setup(2);
         let account_addr = get_account_address(AccountType::NoValidate);
 
         let erc20_class = ContractClassWrapper::try_from(get_contract_class("ERC20.json")).unwrap();
@@ -347,5 +335,80 @@ fn test_verify_tx_longevity() {
             Starknet::validate_unsigned(TransactionSource::InBlock, &crate::Call::declare { transaction });
 
         assert!(validate_result.unwrap().longevity == TransactionLongevity::get());
+    });
+}
+
+#[test]
+fn test_verify_no_require_tag() {
+    new_test_ext().execute_with(|| {
+        basic_test_setup(2);
+
+        let account_addr = get_account_address(AccountType::NoValidate);
+
+        let erc20_class = ContractClassWrapper::try_from(get_contract_class("ERC20.json")).unwrap();
+        let erc20_class_hash =
+            Felt252Wrapper::from_hex_be("057eca87f4b19852cfd4551cf4706ababc6251a8781733a0a11cf8e94211da95").unwrap();
+
+        let transaction = DeclareTransaction {
+            sender_address: account_addr,
+            contract_class: erc20_class,
+            version: 1,
+            compiled_class_hash: erc20_class_hash,
+            nonce: Felt252Wrapper::ZERO,
+            max_fee: Felt252Wrapper::from(u128::MAX),
+            signature: bounded_vec!(),
+        };
+
+        let validate_result = Starknet::validate_unsigned(
+            TransactionSource::InBlock,
+            &crate::Call::declare { transaction: transaction.clone() },
+        );
+
+        let valid_transaction_expected = ValidTransaction::with_tag_prefix("starknet")
+            .priority(u64::MAX - (TryInto::<u64>::try_into(transaction.nonce)).unwrap())
+            .and_provides((transaction.sender_address, transaction.nonce))
+            .longevity(TransactionLongevity::get())
+            .propagate(true)
+            .build();
+
+        assert_eq!(validate_result.unwrap(), valid_transaction_expected.unwrap())
+    });
+}
+
+#[test]
+fn test_verify_require_tag() {
+    new_test_ext().execute_with(|| {
+        basic_test_setup(2);
+
+        let account_addr = get_account_address(AccountType::NoValidate);
+
+        let erc20_class = ContractClassWrapper::try_from(get_contract_class("ERC20.json")).unwrap();
+        let erc20_class_hash =
+            Felt252Wrapper::from_hex_be("057eca87f4b19852cfd4551cf4706ababc6251a8781733a0a11cf8e94211da95").unwrap();
+
+        let transaction = DeclareTransaction {
+            sender_address: account_addr,
+            contract_class: erc20_class,
+            version: 1,
+            compiled_class_hash: erc20_class_hash,
+            nonce: Felt252Wrapper::ONE,
+            max_fee: Felt252Wrapper::from(u128::MAX),
+            signature: bounded_vec!(),
+        };
+
+        let validate_result = Starknet::validate_unsigned(
+            TransactionSource::InBlock,
+            &crate::Call::declare { transaction: transaction.clone() },
+        );
+
+        let valid_transaction_expected = ValidTransaction::with_tag_prefix("starknet")
+            .priority(u64::MAX - (TryInto::<u64>::try_into(transaction.nonce)).unwrap())
+            .and_provides((transaction.sender_address, transaction.nonce))
+            .longevity(TransactionLongevity::get())
+            .propagate(true)
+            .and_requires((transaction.sender_address, Felt252Wrapper(transaction.nonce.0 - FieldElement::ONE)))
+            .build();
+
+        assert_eq!(validate_result.unwrap(), valid_transaction_expected.unwrap())
     });
 }

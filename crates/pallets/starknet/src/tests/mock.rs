@@ -3,6 +3,7 @@ use core::str::FromStr;
 use frame_support::parameter_types;
 use frame_support::traits::{ConstU16, ConstU64, GenesisBuild, Hooks};
 use mp_starknet::execution::types::{ContractClassWrapper, Felt252Wrapper};
+use mp_starknet::sequencer_address::DEFAULT_SEQUENCER_ADDRESS;
 use sp_core::H256;
 use sp_runtime::testing::Header;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
@@ -17,6 +18,7 @@ use {crate as pallet_starknet, frame_system as system};
 use super::constants::*;
 use super::utils::get_contract_class;
 use crate::types::ContractStorageKeyWrapper;
+use crate::{ContractAddressWrapper, SeqAddrUpdate, SequencerAddress};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -72,6 +74,8 @@ impl system::Config for MockRuntime {
 parameter_types! {
     pub const UnsignedPriority: u64 = 1 << 20;
     pub const TransactionLongevity: u64 = u64::MAX;
+    pub const InvokeTxMaxNSteps: u32 = 1_000_000;
+    pub const ValidateMaxNSteps: u32 = 1_000_000;
 }
 
 impl pallet_starknet::Config for MockRuntime {
@@ -81,6 +85,8 @@ impl pallet_starknet::Config for MockRuntime {
     type TimestampProvider = Timestamp;
     type UnsignedPriority = UnsignedPriority;
     type TransactionLongevity = TransactionLongevity;
+    type InvokeTxMaxNSteps = InvokeTxMaxNSteps;
+    type ValidateMaxNSteps = ValidateMaxNSteps;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -141,6 +147,16 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     let token_class_hash = Felt252Wrapper::from_hex_be(TOKEN_CONTRACT_CLASS_HASH).unwrap();
     let fee_token_address = Felt252Wrapper::from_hex_be(FEE_TOKEN_ADDRESS).unwrap();
 
+    // SINGLE/MULTIPLE EVENT EMITTING CONTRACT
+    let single_event_emitting_class = get_contract_class("emit_single_event.json");
+    let single_event_emitting_contract_class_hash = Felt252Wrapper::from_hex_be(EMIT_SINGLE_EVENT_CLASS_HASH).unwrap();
+    let single_event_emitting_contract_address =
+        Felt252Wrapper::from_hex_be(EMIT_SINGLE_EVENT_CONTRACT_ADDRESS).unwrap();
+    let multiple_event_emitting_class = get_contract_class("emit_multiple_events_across_contracts.json");
+    let multiple_event_emitting_class_hash = Felt252Wrapper::from_hex_be(MULTIPLE_EVENT_EMITTING_CLASS_HASH).unwrap();
+    let multiple_event_emitting_contract_address =
+        Felt252Wrapper::from_hex_be(MULTIPLE_EVENT_EMITTING_CONTRACT_ADDRESS).unwrap();
+
     pallet_starknet::GenesisConfig::<MockRuntime> {
         contracts: vec![
             (test_contract_address, test_contract_class_hash),
@@ -153,6 +169,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (no_validate_address, no_validate_class_hash),
             (inner_call_account_address, inner_call_account_class_hash),
             (fee_token_address, token_class_hash),
+            (single_event_emitting_contract_address, single_event_emitting_contract_class_hash),
+            (multiple_event_emitting_contract_address, multiple_event_emitting_class_hash),
         ],
         contract_classes: vec![
             (test_contract_class_hash, ContractClassWrapper::try_from(test_contract_class).unwrap()),
@@ -165,6 +183,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (no_validate_class_hash, ContractClassWrapper::try_from(no_validate_class).unwrap()),
             (inner_call_account_class_hash, ContractClassWrapper::try_from(inner_call_account_class).unwrap()),
             (token_class_hash, ContractClassWrapper::try_from(erc20_class).unwrap()),
+            (
+                single_event_emitting_contract_class_hash,
+                ContractClassWrapper::try_from(single_event_emitting_class).unwrap(),
+            ),
+            (
+                multiple_event_emitting_class_hash,
+                ContractClassWrapper::try_from(multiple_event_emitting_class).unwrap(),
+            ),
         ],
         fee_token_address,
         storage: vec![
@@ -220,8 +246,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
                 get_storage_key(&braavos_account_address, "Account_signers", &[Felt252Wrapper::ZERO], 0),
                 Felt252Wrapper::from_hex_be(ACCOUNT_PUBLIC_KEY).unwrap(),
             ),
+            (
+                get_storage_key(&multiple_event_emitting_contract_address, "external_contract_addr", &[], 0),
+                Felt252Wrapper::from_hex_be(EMIT_SINGLE_EVENT_CONTRACT_ADDRESS).unwrap(),
+            ),
         ],
         chain_id: Felt252Wrapper(FieldElement::from_byte_slice_be(b"SN_GOERLI").unwrap()),
+        seq_addr_updated: true,
         ..Default::default()
     }
     .assimilate_storage(&mut t)
@@ -235,13 +266,21 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 /// # Arguments
 /// * `n` - The block number to run to.
 pub(crate) fn run_to_block(n: u64) {
-    let deployer_origin = RuntimeOrigin::none();
     for b in System::block_number()..=n {
+        SeqAddrUpdate::<MockRuntime>::put(true);
         System::set_block_number(b);
         Timestamp::set_timestamp(System::block_number() * 6_000);
-        Starknet::ping(deployer_origin.clone()).unwrap();
         Starknet::on_finalize(b);
     }
+}
+
+/// Setup initial block and sequencer address for unit tests.
+pub(crate) fn basic_test_setup(n: u64) {
+    SeqAddrUpdate::<MockRuntime>::put(true);
+    let default_addr: ContractAddressWrapper = ContractAddressWrapper::try_from(&DEFAULT_SEQUENCER_ADDRESS).unwrap();
+    SequencerAddress::<MockRuntime>::put(default_addr);
+    System::set_block_number(0);
+    run_to_block(n);
 }
 
 /// Returns the storage key for a given storage name, keys and offset.
@@ -303,6 +342,7 @@ pub fn get_account_calldata(account_type: AccountType) -> Vec<&'static str> {
             BRAAVOS_ACCOUNT_CLASS_HASH, // Braavos account class hash
             "0x02dd76e7ad84dbed81c314ffe5e7a7cacfb8f4836f01af4e913f275f89a3de1a", // 'initializer' selector
         ],
+        AccountType::Openzeppelin => vec![ACCOUNT_PUBLIC_KEY],
         _ => vec![],
     }
 }
@@ -344,7 +384,6 @@ pub fn calculate_contract_address(
 /// Returns the chain id used by the mock runtime.
 /// # Returns
 /// The chain id of the mock runtime.
-pub fn get_chain_id() -> String {
-    let chain_id = Starknet::chain_id().0.to_bytes_be();
-    std::str::from_utf8(&chain_id[..]).unwrap().to_string()
+pub fn get_chain_id() -> Felt252Wrapper {
+    Starknet::chain_id()
 }

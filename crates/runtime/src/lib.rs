@@ -67,7 +67,6 @@ construct_runtime!(
         Timestamp: pallet_timestamp,
         Aura: pallet_aura,
         Grandpa: pallet_grandpa,
-        Sudo: pallet_sudo,
         // Include Starknet pallet.
         Starknet: pallet_starknet,
     }
@@ -237,13 +236,6 @@ impl_runtime_apis! {
     }
 
     impl pallet_starknet::runtime_api::StarknetRuntimeApi<Block> for Runtime {
-        fn current_block_hash() -> Felt252Wrapper {
-            Starknet::current_block_hash()
-        }
-
-        fn current_block() -> mp_starknet::block::Block {
-            Starknet::current_block()
-        }
 
         fn get_storage_at(address: ContractAddressWrapper, key: StorageKeyWrapper) -> Result<Felt252Wrapper, DispatchError> {
             Starknet::get_storage_at(address, key)
@@ -258,9 +250,6 @@ impl_runtime_apis! {
         }
 
         fn events() -> Vec<EventWrapper> {
-            // (Greg) Substrate documentation states "Should only be called if you know
-            // what you are doing and outside of the runtime block
-            // execution". Is it ok to call here?
             System::read_events_no_consensus().filter_map(|event| {
                 match *event {
                     EventRecord { event: RuntimeEvent::Starknet(Event::StarknetEvent(event)), .. } => Some(event),
@@ -290,7 +279,7 @@ impl_runtime_apis! {
         }
 
         fn extrinsic_filter(xts: Vec<<Block as BlockT>::Extrinsic>) -> Vec<Transaction> {
-            let chain_id  = &Starknet::chain_id_str();
+            let chain_id  = Starknet::chain_id();
 
             xts.into_iter().filter_map(|xt| match xt.function {
                 RuntimeCall::Starknet( invoke { transaction }) => Some(transaction.from_invoke(chain_id)),
