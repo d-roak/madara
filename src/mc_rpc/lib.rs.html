@@ -901,6 +901,13 @@
 <a href="#901" id="901">901</a>
 <a href="#902" id="902">902</a>
 <a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Starknet RPC server API implementation
 //!
 //! It uses the madara client and backend in order to answer queries.
@@ -917,7 +924,7 @@
 <span class="kw">use </span>errors::StarknetRpcApiError;
 <span class="kw">use </span>jsonrpsee::core::{async_trait, RpcResult};
 <span class="kw">use </span>log::error;
-<span class="kw">use </span>mc_rpc_core::utils::{get_block_by_block_hash, to_rpc_contract_class, to_tx};
+<span class="kw">pub use </span>mc_rpc_core::utils::<span class="kw-2">*</span>;
 <span class="kw">use </span>mc_rpc_core::Felt;
 <span class="kw">pub use </span>mc_rpc_core::StarknetRpcApiServer;
 <span class="kw">use </span>mc_storage::OverrideHandle;
@@ -926,8 +933,7 @@
 <span class="kw">use </span>mp_starknet::traits::hash::HasherT;
 <span class="kw">use </span>mp_starknet::traits::ThreadSafeCopy;
 <span class="kw">use </span>mp_starknet::transaction::types::{
-    DeclareTransaction, DeployAccountTransaction, InvokeTransaction, RPCTransactionConversionError,
-    Transaction <span class="kw">as </span>MPTransaction, TxType,
+    DeployAccountTransaction, InvokeTransaction, RPCTransactionConversionError, Transaction <span class="kw">as </span>MPTransaction, TxType,
 };
 <span class="kw">use </span>pallet_starknet::runtime_api::{ConvertTransactionRuntimeApi, StarknetRuntimeApi};
 <span class="kw">use </span>sc_client_api::backend::{Backend, StorageProvider};
@@ -1427,7 +1433,11 @@
     /// # Returns
     ///
     /// * `fee_estimate` - fee estimate in gwei
-    </span><span class="kw">async fn </span>estimate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, request: BroadcastedTransaction, block_id: BlockId) -&gt; RpcResult&lt;FeeEstimate&gt; {
+    </span><span class="kw">async fn </span>estimate_fee(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: Vec&lt;BroadcastedTransaction&gt;,
+        block_id: BlockId,
+    ) -&gt; RpcResult&lt;Vec&lt;FeeEstimate&gt;&gt; {
         <span class="comment">// TODO:
         //      - modify BroadcastedTransaction to assert versions == &quot;0x100000000000000000000000000000001&quot;
         //      - to ensure broadcasted query signatures aren&#39;t valid on mainnet
@@ -1439,24 +1449,28 @@
         <span class="kw">let </span>best_block_hash = <span class="self">self</span>.client.info().best_hash;
         <span class="kw">let </span>chain_id = Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>);
 
-        <span class="kw">let </span>tx = to_tx(request, chain_id).map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
-            StarknetRpcApiError::InternalServerError
-        })<span class="question-mark">?</span>;
-        <span class="kw">let </span>(actual_fee, gas_usage) = <span class="self">self
-            </span>.client
-            .runtime_api()
-            .estimate_fee(substrate_block_hash, tx)
-            .map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Request parameters error: {e}&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>estimates = <span class="macro">vec!</span>[];
+        <span class="kw">for </span>tx <span class="kw">in </span>request {
+            <span class="kw">let </span>tx = to_tx(tx, chain_id).map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
                 StarknetRpcApiError::InternalServerError
-            })<span class="question-mark">?
-            </span>.map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;Failed to call function: {:#?}&quot;</span>, e);
-                StarknetRpcApiError::ContractError
             })<span class="question-mark">?</span>;
+            <span class="kw">let </span>(actual_fee, gas_usage) = <span class="self">self
+                </span>.client
+                .runtime_api()
+                .estimate_fee(substrate_block_hash, tx)
+                .map_err(|e| {
+                    <span class="macro">error!</span>(<span class="string">&quot;Request parameters error: {e}&quot;</span>);
+                    StarknetRpcApiError::InternalServerError
+                })<span class="question-mark">?
+                </span>.map_err(|e| {
+                    <span class="macro">error!</span>(<span class="string">&quot;Failed to call function: {:#?}&quot;</span>, e);
+                    StarknetRpcApiError::ContractError
+                })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(FeeEstimate { gas_price: <span class="number">0</span>, gas_consumed: gas_usage, overall_fee: actual_fee })
+            estimates.push(FeeEstimate { gas_price: <span class="number">0</span>, gas_consumed: gas_usage, overall_fee: actual_fee });
+        }
+        <span class="prelude-val">Ok</span>(estimates)
     }
 
     <span class="comment">// Returns the details of a transaction by a given block id and index
@@ -1580,11 +1594,11 @@
     <span class="doccomment">/// Returns all events matching the given filter
     </span><span class="kw">async fn </span>get_events(<span class="kw-2">&amp;</span><span class="self">self</span>, filter: EventFilterWithPage) -&gt; RpcResult&lt;EventsPage&gt; {
         <span class="kw">let </span>continuation_token = <span class="kw">match </span>filter.result_page_request.continuation_token {
-            <span class="prelude-val">Some</span>(token) =&gt; token.parse::&lt;usize&gt;().map_err(|e| {
+            <span class="prelude-val">Some</span>(token) =&gt; types::ContinuationToken::parse(token).map_err(|e| {
                 <span class="macro">error!</span>(<span class="string">&quot;Failed to parse continuation token: {:?}&quot;</span>, e);
                 StarknetRpcApiError::InvalidContinuationToken
             })<span class="question-mark">?</span>,
-            <span class="prelude-val">None </span>=&gt; <span class="number">0usize</span>,
+            <span class="prelude-val">None </span>=&gt; types::ContinuationToken::default(),
         };
         <span class="kw">let </span>from_address = filter.event_filter.address.map(Felt252Wrapper::from);
         <span class="kw">let </span>keys = filter.event_filter.keys.unwrap_or_default();
@@ -1645,7 +1659,7 @@
         <span class="kw">let </span>best_block_hash = <span class="self">self</span>.client.info().best_hash;
         <span class="kw">let </span>chain_id = Felt252Wrapper(<span class="self">self</span>.chain_id()<span class="question-mark">?</span>.<span class="number">0</span>);
 
-        <span class="kw">let </span>declare_tx = DeclareTransaction::try_from(declare_transaction).map_err(|e| {
+        <span class="kw">let </span>declare_tx = to_declare_transaction(declare_transaction).map_err(|e| {
             <span class="macro">error!</span>(<span class="string">&quot;{e}&quot;</span>);
             StarknetRpcApiError::InternalServerError
         })<span class="question-mark">?</span>;
@@ -1654,7 +1668,7 @@
         <span class="kw">let </span>contract_class = <span class="self">self
             </span>.overrides
             .for_block_hash(<span class="self">self</span>.client.as_ref(), current_block_hash)
-            .contract_class_by_class_hash(current_block_hash, declare_tx.compiled_class_hash);
+            .contract_class_by_class_hash(current_block_hash, declare_tx.class_hash);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(contract_class) = contract_class {
             <span class="macro">error!</span>(<span class="string">&quot;Contract class already exists: {:?}&quot;</span>, contract_class);
             <span class="kw">return </span><span class="prelude-val">Err</span>(StarknetRpcApiError::ClassAlreadyDeclared.into());
@@ -1669,7 +1683,7 @@
 
         <span class="prelude-val">Ok</span>(DeclareTransactionResult {
             transaction_hash: transaction.hash.into(),
-            class_hash: declare_tx.compiled_class_hash.into(),
+            class_hash: declare_tx.class_hash.into(),
         })
     }
 
