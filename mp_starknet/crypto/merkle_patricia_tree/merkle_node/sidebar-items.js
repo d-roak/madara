@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Direction","Node"],"struct":["BinaryNode","EdgeNode","NodeId"]};
+window.SIDEBAR_ITEMS = {"enum":["Direction","Node"],"struct":["BinaryNode","EdgeNode"]};
